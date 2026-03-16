@@ -130,8 +130,14 @@ io.on('connection', (socket) => {
     // ── Déconnexion ────────────────────────────────────────────────────
     socket.on('disconnect', () => {
         if (socket.userId) {
-            users.delete(socket.userId);
-            console.log(`[-] Disconnected: ${socket.userId}`);
+            // Ne supprimer que si ce socket est encore le socket actif de l'user
+            // (évite de supprimer quand une reconnexion a déjà eu lieu)
+            if (users.get(socket.userId) === socket.id) {
+                users.delete(socket.userId);
+                console.log(`[-] Disconnected: ${socket.userId}`);
+            } else {
+                console.log(`[-] Stale disconnect ignored for: ${socket.userId}`);
+            }
         }
     });
 });
