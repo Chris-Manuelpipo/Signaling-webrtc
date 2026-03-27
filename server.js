@@ -1,14 +1,28 @@
 // server.js — Talky Signaling Server (WebRTC)
 // Déployer sur Render.com (gratuit)
 
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
-
+const { Server } = require('socket.io'); 
 const admin = require('firebase-admin');
 
 // Initialiser Firebase Admin avec le Service Account
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+if (!rawServiceAccount) {
+  throw new Error(
+    'FIREBASE_SERVICE_ACCOUNT is missing. Set it to the JSON string of your Firebase service account.'
+  );
+}
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(rawServiceAccount);
+} catch (err) {
+  throw new Error(
+    'FIREBASE_SERVICE_ACCOUNT is not valid JSON. Ensure it is a JSON string (not undefined, not a file path).'
+  );
+}
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
