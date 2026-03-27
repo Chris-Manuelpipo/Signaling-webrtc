@@ -21,7 +21,7 @@ const io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-app.get('/', (_, res) => res.send('Talky Signaling Server ✅'));
+app.get('/', (_, res) => res.send('Talky Signaling Server en marche✅'));
 
 // ── Map userId → socketId ──────────────────────────────────────────────
 const users = new Map(); // userId → socketId
