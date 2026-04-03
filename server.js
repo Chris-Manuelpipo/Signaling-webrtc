@@ -1,5 +1,4 @@
 // server.js — Talky Signaling Server (WebRTC)
-// Déployer sur Render.com (gratuit)
 
 require('dotenv').config();
 
@@ -35,13 +34,10 @@ const io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-app.get('/', (_, res) => res.send('Talky Signaling Server en marche✅'));
+app.get('/', (_, res) => res.send('Talky Signaling : Serveur en marche✅'));
 
-// ── Map userId → socketId ──────────────────────────────────────────────
-const users = new Map(); // userId → socketId
-
-// ── Group calls: roomId → Set<userId> ──────────────────────────────────────
-const groupCallRooms = new Map(); // roomId → {participants: Map<userId, socketId>, creatorId: String}
+const users = new Map();
+const groupCallRooms = new Map();
 
 app.use(express.json());
 
@@ -49,34 +45,42 @@ app.post('/notify', async (req, res) => {
   try {
     const { toUserId, title, body, type, conversationId, callerId } = req.body;
 
-    // Lire le fcmToken du destinataire dans Firestore
     const userDoc = await db.collection('users').doc(toUserId).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
 
     const fcmToken = userDoc.data().fcmToken;
     if (!fcmToken) return res.status(400).json({ error: 'No FCM token' });
 
-    // Construire le message FCM
+    const isCall = type === 'call' || type === 'group_call';
+
+    // ── DATA-ONLY message ──────────────────────────────────────────────
+    // PAS de champ "notification" → Android ne génère pas de notif système.
+    // Flutter reçoit tout via onMessage / onMessageOpenedApp / getInitialMessage
+    // et flutter_local_notifications affiche la notif avec le bon payload JSON.
     const message = {
       token: fcmToken,
-      notification: { title, body },
       data: {
-        type:           String(type ?? 'message'),
+        type:           String(type           ?? 'message'),
+        title:          String(title          ?? 'Talky'),
+        body:           String(body           ?? ''),
         conversationId: String(conversationId ?? ''),
-        callerId:       String(callerId ?? ''),
-        callerName:     String(title ?? ''),
-        roomId:         String(req.body.roomId ?? ''),
-        isVideo:        String(req.body.isVideo ?? false),
+        callerId:       String(callerId       ?? ''),
+        callerName:     String(title          ?? ''),
+        roomId:         String(req.body.roomId  ?? ''),
+        isVideo:        String(req.body.isVideo ?? 'false'),
+        name:           String(req.body.name    ?? title ?? ''),
+        photo:          String(req.body.photo   ?? ''),
       },
       android: {
-        priority: (type === 'call' || type === 'group_call') ? 'high' : 'normal',
-        notification: {
-          // FCM data values must be strings
-          sound:       'default',
-          channelId:   (type === 'call' || type === 'group_call') ? 'calls' : 'messages',
-          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
-          priority:    (type === 'call' || type === 'group_call') ? 'max' : 'high',
-          visibility:  'public',
+        priority: isCall ? 'high' : 'normal',
+        // Pas de notification android ici — on laisse Flutter tout gérer
+      },
+      apns: {
+        payload: {
+          aps: {
+            // iOS : nécessite content-available pour reveiller l'app en background
+            'content-available': 1,
+          },
         },
       },
     };
@@ -93,14 +97,12 @@ app.post('/notify', async (req, res) => {
 io.on('connection', (socket) => {
     console.log(`[+] Connected: ${socket.id}`);
 
-    // ── Enregistrement de l'utilisateur ───────────────────────────────
     socket.on('register', (userId) => {
         users.set(userId, socket.id);
         socket.userId = userId;
         console.log(`[register] ${userId} → ${socket.id}`);
     });
 
-    // ── Appel sortant ──────────────────────────────────────────────────
     socket.on('call_user', ({ targetUserId, callerId, callerName, callerPhoto, isVideo, offer }) => {
         const targetSocket = users.get(targetUserId);
         if (!targetSocket) {
@@ -117,7 +119,6 @@ io.on('connection', (socket) => {
         console.log(`[call] ${callerId} → ${targetUserId} (${isVideo ? 'vidéo' : 'audio'})`);
     });
 
-    // ── Réponse à l'appel ──────────────────────────────────────────────
     socket.on('answer_call', ({ callerId, answer }) => {
         const callerSocket = users.get(callerId);
         if (callerSocket) {
@@ -125,7 +126,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── Refus de l'appel ──────────────────────────────────────────────
     socket.on('reject_call', ({ callerId }) => {
         const callerSocket = users.get(callerId);
         if (callerSocket) {
@@ -133,7 +133,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── ICE Candidates ─────────────────────────────────────────────────
     socket.on('ice_candidate', ({ targetUserId, candidate }) => {
         const targetSocket = users.get(targetUserId);
         if (targetSocket) {
@@ -141,7 +140,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── Fin d'appel ────────────────────────────────────────────────────
     socket.on('end_call', ({ targetUserId }) => {
         const targetSocket = users.get(targetUserId);
         if (targetSocket) {
@@ -149,8 +147,6 @@ io.on('connection', (socket) => {
         }
     });
 
-
-    // ── Créer un appel de groupe ──────────────────────────────────────────
     socket.on('create_group_call', ({ roomId, callerId, callerName, callerPhoto, isVideo, targetUserIds }) => {
         if (!groupCallRooms.has(roomId)) {
             groupCallRooms.set(roomId, {
@@ -162,7 +158,6 @@ io.on('connection', (socket) => {
         const room = groupCallRooms.get(roomId);
         room.participants.set(callerId, socket.id);
 
-        // Inviter les participants ciblés
         if (Array.isArray(targetUserIds)) {
             targetUserIds.forEach((uid) => {
                 const targetSocket = users.get(uid);
@@ -177,126 +172,85 @@ io.on('connection', (socket) => {
                 }
             });
         }
-
         console.log(`[group_call] ${callerId} created room ${roomId}`);
     });
 
-    // ── Rejoindre un appel de groupe ──────────────────────────────────────
     socket.on('join_group_call', ({ roomId, userId, userName, userPhoto }) => {
         const room = groupCallRooms.get(roomId);
         if (!room) {
             socket.emit('group_call_error', { reason: 'room_not_found' });
             return;
         }
-
         room.participants.set(userId, socket.id);
 
-        // Notifier les autres participants
         room.participants.forEach((participantSocketId, participantUserId) => {
             if (participantUserId !== userId) {
                 io.to(participantSocketId).emit('group_user_joined', {
-                    roomId,
-                    userId,
-                    userName,
-                    userPhoto,
+                    roomId, userId, userName, userPhoto,
                 });
             }
         });
 
-        // Envoyer la liste des participants actuels au nouveau participant
         const participants = [];
         room.participants.forEach((_, participantUserId) => {
-            if (participantUserId !== userId) {
-                participants.push(participantUserId);
-            }
+            if (participantUserId !== userId) participants.push(participantUserId);
         });
         socket.emit('group_participants', { roomId, participants });
 
         console.log(`[group_call] ${userId} joined room ${roomId} (${room.participants.size} participants)`);
     });
 
-    // ── Offre ciblée (group) ───────────────────────────────────────────────
     socket.on('group_offer', ({ roomId, fromUserId, toUserId, offer }) => {
         const room = groupCallRooms.get(roomId);
         if (!room) return;
         const targetSocket = room.participants.get(toUserId);
         if (targetSocket) {
-            io.to(targetSocket).emit('group_offer', {
-                roomId,
-                fromUserId,
-                offer,
-            });
+            io.to(targetSocket).emit('group_offer', { roomId, fromUserId, offer });
         }
     });
 
-    // ── Réponse ciblée (group) ─────────────────────────────────────────────
     socket.on('group_answer', ({ roomId, fromUserId, toUserId, answer }) => {
         const room = groupCallRooms.get(roomId);
         if (!room) return;
         const targetSocket = room.participants.get(toUserId);
         if (targetSocket) {
-            io.to(targetSocket).emit('group_answer', {
-                roomId,
-                fromUserId,
-                answer,
-            });
+            io.to(targetSocket).emit('group_answer', { roomId, fromUserId, answer });
         }
     });
 
-    // ── ICE Candidates pour groupe (ciblé) ────────────────────────────────
     socket.on('group_ice_candidate', ({ roomId, fromUserId, toUserId, candidate }) => {
         const room = groupCallRooms.get(roomId);
         if (!room) return;
         const targetSocket = room.participants.get(toUserId);
         if (targetSocket) {
-            io.to(targetSocket).emit('group_ice_candidate', {
-                roomId,
-                fromUserId,
-                candidate,
-            });
+            io.to(targetSocket).emit('group_ice_candidate', { roomId, fromUserId, candidate });
         }
     });
 
-    // ── Quitter un appel de groupe ────────────────────────────────────────
     socket.on('leave_group_call', ({ roomId }) => {
         const room = groupCallRooms.get(roomId);
         if (!room) return;
-
         const userId = socket.userId;
         room.participants.delete(userId);
-
         room.participants.forEach((participantSocketId) => {
-            io.to(participantSocketId).emit('group_user_left', {
-                roomId,
-                userId,
-            });
+            io.to(participantSocketId).emit('group_user_left', { roomId, userId });
         });
-
-        if (room.participants.size === 0) {
-            groupCallRooms.delete(roomId);
-        }
-
+        if (room.participants.size === 0) groupCallRooms.delete(roomId);
         console.log(`[group_call] ${userId} left room ${roomId}`);
     });
 
-    // ── Fin d'appel de groupe ────────────────────────────────────────────
     socket.on('end_group_call', ({ roomId }) => {
         const room = groupCallRooms.get(roomId);
         if (!room) return;
-
         room.participants.forEach((participantSocketId) => {
             io.to(participantSocketId).emit('group_call_ended', { roomId });
         });
-
         groupCallRooms.delete(roomId);
         console.log(`[group_call] Room ${roomId} ended`);
     });
 
-    // ── Déconnexion ────────────────────────────────────────────────────
     socket.on('disconnect', () => {
         if (socket.userId) {
-            // Ne supprimer que si ce socket est encore le socket actif de l'user
-            // (évite de supprimer quand une reconnexion a déjà eu lieu)
             if (users.get(socket.userId) === socket.id) {
                 users.delete(socket.userId);
                 console.log(`[-] Disconnected: ${socket.userId}`);
