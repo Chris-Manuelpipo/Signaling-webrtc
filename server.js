@@ -1,10 +1,37 @@
 require('dotenv').config();
 
 // ── Firebase Admin — DOIT être initialisé avant tout require de route/middleware ──
+//
+// Deux sources supportées :
+//   1. Fichier local `serviceAccountKey.json` (dev)
+//   2. Variable d'env `FIREBASE_SERVICE_ACCOUNT` au format JSON (prod / Render /
+//      Railway / etc.) — les \n des private_key sont gérés automatiquement.
 const admin = require('firebase-admin');
-admin.initializeApp({
-  credential: admin.credential.cert(require('./serviceAccountKey.json')),
-});
+
+function loadFirebaseCredentials() {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      if (parsed.private_key && parsed.private_key.includes('\\n')) {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+      }
+      return admin.credential.cert(parsed);
+    } catch (e) {
+      console.error('[Firebase] FIREBASE_SERVICE_ACCOUNT invalide:', e.message);
+      throw e;
+    }
+  }
+  try {
+    return admin.credential.cert(require('./serviceAccountKey.json'));
+  } catch (e) {
+    throw new Error(
+      'Aucun credential Firebase trouvé : ni FIREBASE_SERVICE_ACCOUNT, ' +
+      'ni serviceAccountKey.json.'
+    );
+  }
+}
+
+admin.initializeApp({ credential: loadFirebaseCredentials() });
 
 // ── Express + HTTP + Socket.IO ──
 const express = require('express');
