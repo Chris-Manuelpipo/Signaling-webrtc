@@ -6,16 +6,18 @@ const getStatus = async (req, res) => {
   try {
     const alanyaID = req.user.alanyaID;
 
-    // Statuts actifs des contacts (pas les miens, pas expirés)
+    // Statuts actifs des contacts (pas les miens, pas expirés) + likedByMe
     const [rows] = await pool.execute(
-      `SELECT s.*, u.nom, u.pseudo, u.avatar_url, u.is_online
+      `SELECT s.*, u.nom, u.pseudo, u.avatar_url, u.is_online,
+              (sl.statutID IS NOT NULL) AS likedByMe
        FROM statut s
        JOIN users u ON s.alanyaID = u.alanyaID
+       LEFT JOIN statut_likes sl ON sl.statutID = s.ID AND sl.alanyaID = ?
        WHERE s.expiredAt > NOW()
          AND s.alanyaID != ?
        ORDER BY s.createdAt DESC
        LIMIT 100`,
-      [alanyaID]
+      [alanyaID, alanyaID]
     );
 
     res.json(rows);
@@ -148,6 +150,59 @@ const viewStatus = async (req, res) => {
   }
 };
 
+const likeStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const alanyaID = req.user.alanyaID;
+
+    const [statut] = await pool.execute(
+      'SELECT * FROM statut WHERE ID = ? AND expiredAt > NOW()',
+      [id]
+    );
+    if (statut.length === 0) {
+      return res.status(404).json({ error: 'Statut introuvable ou expiré' });
+    }
+    if (statut[0].alanyaID === alanyaID) {
+      return res.status(400).json({ error: 'Vous ne pouvez pas liker votre propre statut' });
+    }
+
+    const [ins] = await pool.execute(
+      'INSERT IGNORE INTO statut_likes (statutID, alanyaID, likedAt) VALUES (?, ?, NOW())',
+      [id, alanyaID]
+    );
+    if (ins.affectedRows > 0) {
+      await pool.execute(
+        'UPDATE statut SET likedBy = likedBy + 1 WHERE ID = ?',
+        [id]
+      );
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    throw error;
+  }
+};
+
+const unlikeStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const alanyaID = req.user.alanyaID;
+
+    const [del] = await pool.execute(
+      'DELETE FROM statut_likes WHERE statutID = ? AND alanyaID = ?',
+      [id, alanyaID]
+    );
+    if (del.affectedRows > 0) {
+      await pool.execute(
+        'UPDATE statut SET likedBy = GREATEST(likedBy - 1, 0) WHERE ID = ?',
+        [id]
+      );
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   getStatus,
   getMyStatus,
@@ -155,4 +210,6 @@ module.exports = {
   createStatus,
   deleteStatus,
   viewStatus,
+  likeStatus,
+  unlikeStatus,
 };

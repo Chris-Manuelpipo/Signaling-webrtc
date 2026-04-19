@@ -49,6 +49,7 @@ const messageOpsRoutes   = require('./src/routes/messageOps');
 const statusRoutes       = require('./src/routes/status');
 const callRoutes         = require('./src/routes/calls');
 const meetingRoutes      = require('./src/routes/meetings');
+const notifyRoutes       = require('./src/routes/notify');
 
 const registerAuthHandler = require('./src/socket/handlers/auth');
 const { joinConversation, messageSend, typingStart, typingStop, presenceOnline, presenceOffline, handleDisconnect } = require('./src/socket/handlers/chat');
@@ -80,6 +81,7 @@ app.use('/api/messages',      messageOpsRoutes);
 app.use('/api/status',        statusRoutes);
 app.use('/api/calls',         callRoutes);
 app.use('/api/meetings',      meetingRoutes);
+app.use('/notify',            notifyRoutes);
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 

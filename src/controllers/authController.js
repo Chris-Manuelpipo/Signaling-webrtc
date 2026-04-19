@@ -47,19 +47,22 @@ const register = async (req, res) => {
     const { nom, pseudo, avatar_url, idPays, fcm_token, device_ID } = req.body;
 
     // Helper : pose `talky_phone` sur le user Firebase en préservant les
-    // autres custom claims éventuels.
+    // autres custom claims éventuels. Si ça échoue, le client n'aura jamais
+    // le claim dans son JWT → 401 « No phone claim » sur /auth/me : on échoue explicitement.
     const setPhoneClaim = async () => {
-      try {
-        const fbUser = await admin.auth().getUser(firebaseUid);
-        const existing = fbUser.customClaims || {};
-        if (existing.talky_phone !== phone) {
-          await admin.auth().setCustomUserClaims(firebaseUid, {
-            ...existing,
-            talky_phone: phone,
-          });
-        }
-      } catch (e) {
-        console.warn('[Register] setCustomUserClaims failed:', e.message);
+      const fbUser = await admin.auth().getUser(firebaseUid);
+      const existing = fbUser.customClaims || {};
+      if (existing.talky_phone === phone) return;
+      await admin.auth().setCustomUserClaims(firebaseUid, {
+        ...existing,
+        talky_phone: phone,
+      });
+      const verify = await admin.auth().getUser(firebaseUid);
+      const got = verify.customClaims?.talky_phone;
+      if (got !== phone) {
+        throw new Error(
+          `talky_phone claim not applied (expected ${phone}, got ${got ?? 'undefined'})`,
+        );
       }
     };
 
