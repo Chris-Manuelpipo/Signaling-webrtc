@@ -72,7 +72,10 @@ const {
 const {
   meetingCreate, meetingJoinRequest, meetingJoinAccept, meetingJoinDecline,
   meetingStart, meetingEnd, meetingChat,
+  meetingLeave, meetingOffer, meetingAnswer, meetingIceCandidate, 
 } = require('./src/socket/handlers/meetings');
+
+const { startMeetingScheduler, stopMeetingScheduler } = require('./src/services/meetingScheduler');
 
 const app    = express();
 const server = http.createServer(app);
@@ -141,7 +144,10 @@ io.on('connection', (socket) => {
   meetingStart(io, socket, userSockets);
   meetingEnd(io, socket, userSockets);
   meetingChat(io, socket, userSockets);
-
+  meetingLeave(io, socket, userSockets);      
+  meetingOffer(io, socket, userSockets);     
+  meetingAnswer(io, socket, userSockets);    
+  meetingIceCandidate(io, socket, userSockets); 
   socket.on('disconnect', async () => {
     console.log('[Socket] Client déconnecté:', socket.id);
     await handleDisconnect(io, socket, userSockets);
@@ -149,6 +155,16 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Talky Signaling Server on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 Talky Signaling Server on port ${PORT}`);
+  // Démarrer le scheduler pour les notifications de réunion
+  startMeetingScheduler();
+});
+
+process.on('SIGINT', () => {
+  console.log('Arrêt du serveur...');
+  stopMeetingScheduler();
+  process.exit(0);
+});
 
 module.exports = { app, server, io };

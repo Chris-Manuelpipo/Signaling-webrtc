@@ -1,5 +1,14 @@
 const pool = require('../config/db');
 
+const _INVALID_URL_VALUES = ['NON DEFINI', 'INDEFINI', 'undefined', 'null', ''];
+const sanitizeUrl = (url) => {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (_INVALID_URL_VALUES.includes(trimmed)) return null;
+  if (!trimmed.startsWith('http')) return null;
+  return trimmed;
+};
+
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -12,7 +21,7 @@ const getUserById = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(rows[0]);
+    res.json({ ...rows[0], avatar_url: sanitizeUrl(rows[0].avatar_url) });
   } catch (error) {
     throw error;
   }
@@ -30,7 +39,7 @@ const getUserByPhone = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(rows[0]);
+    res.json(rows.map(u => ({ ...u, avatar_url: sanitizeUrl(u.avatar_url) })));
   } catch (error) {
     throw error;
   }

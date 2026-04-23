@@ -10,6 +10,7 @@ const {
   joinMeeting,
   acceptJoinRequest,
   declineJoinRequest,
+  inviteParticipants,
 } = require('../controllers/meetingController');
 
 router.get('/', auth, getMeetings);
@@ -18,6 +19,7 @@ router.get('/:id', auth, getMeetingById);
 router.put('/:id', auth, updateMeeting);
 router.delete('/:id', auth, deleteMeeting);
 router.post('/:id/join', auth, joinMeeting);
+router.post('/:id/invite', auth, inviteParticipants);
 router.post('/:id/accept/:userId', auth, acceptJoinRequest);
 router.post('/:id/decline/:userId', auth, declineJoinRequest);
 

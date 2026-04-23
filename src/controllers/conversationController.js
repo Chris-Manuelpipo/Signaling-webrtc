@@ -1,5 +1,13 @@
 const pool = require('../config/db');
-
+// ── Helper : nettoyer avatar_url avant envoi client ──────────────────
+const _INVALID_URL_VALUES = ['NON DEFINI', 'INDEFINI', 'undefined', 'null', ''];
+const sanitizeUrl = (url) => {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (_INVALID_URL_VALUES.includes(trimmed)) return null;
+  if (!trimmed.startsWith('http')) return null;
+  return trimmed;
+};
 // ── Helper : attacher les participants (avec user info) à une conv ───────
 async function attachParticipants(conversationRow) {
   if (!conversationRow) return conversationRow;
@@ -15,7 +23,7 @@ async function attachParticipants(conversationRow) {
     alanyaID:    p.alanyaID,
     nom:         p.nom,
     pseudo:      p.pseudo,
-    avatar_url:  p.avatar_url,
+    avatar_url:  sanitizeUrl(p.avatar_url),   // ← nettoyage ici
     alanyaPhone: p.alanyaPhone,
     is_online:   p.is_online,
     last_seen:   p.last_seen,

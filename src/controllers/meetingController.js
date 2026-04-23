@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { notifyMeetingInvite } = require('../services/notificationService');
 
 const getMeetings = async (req, res) => {
   try {
@@ -192,6 +193,57 @@ const declineJoinRequest = async (req, res) => {
   }
 };
 
+const inviteParticipants = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { participant_ids = [] } = req.body;
+    const alanyaID = req.user.alanyaID;
+
+    // Vérifier que l'utilisateur est l'organisateur et récupérer les détails du meeting
+    const [meetings] = await pool.execute(
+      'SELECT m.*, u.nom as organiser_nom FROM meeting m JOIN users u ON m.idOrganiser = u.alanyaID WHERE m.idMeeting = ? AND m.idOrganiser = ?',
+      [id, alanyaID]
+    );
+
+    if (meetings.length === 0) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    const meeting = meetings[0];
+
+    // Ajouter les participants avec le statut "pending" (0)
+    for (const participantId of participant_ids) {
+      const [existing] = await pool.execute(
+        'SELECT * FROM participant WHERE idMeeting = ? AND IDparticipant = ?',
+        [id, participantId]
+      );
+
+      if (existing.length === 0) {
+        await pool.execute(
+          'INSERT INTO participant (idMeeting, IDparticipant, status, start_time, connecte, duree) VALUES (?, ?, 0, NOW(), 0, 0)',
+          [id, participantId]
+        );
+
+        // Envoyer la notification d'invitation
+        try {
+          await notifyMeetingInvite(
+            participantId,
+            meeting.organiser_nom,
+            meeting.objet,
+            meeting.start_time
+          );
+        } catch (err) {
+          console.error('[Meeting] Erreur notification invite:', err.message);
+        }
+      }
+    }
+
+    res.json({ message: 'Participants invited' });
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   getMeetings,
   createMeeting,
@@ -201,4 +253,5 @@ module.exports = {
   joinMeeting,
   acceptJoinRequest,
   declineJoinRequest,
+  inviteParticipants,
 };

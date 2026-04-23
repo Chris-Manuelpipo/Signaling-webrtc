@@ -104,6 +104,27 @@ const notifyStatusView = async (statusOwnerID, viewerName) => {
   });
 };
 
+const notifyMeetingInvite = async (participantId, organiserName, meetingTitle, meetingTime) => {
+  await sendToUser(participantId, {
+    type:          'meeting_invite',
+    title:         'Nouvelle réunion',
+    body:          `${organiserName} vous invite à : ${meetingTitle}`,
+    meetingTitle:  String(meetingTitle),
+    organiserName: String(organiserName),
+    meetingTime:   String(meetingTime),
+  });
+};
+
+const notifyMeetingReminder = async (participantId, meetingTitle, organiserName) => {
+  await sendToUser(participantId, {
+    type:          'meeting_reminder',
+    title:         'Réunion dans 10 minutes',
+    body:          `${meetingTitle} démarre dans 10 minutes`,
+    meetingTitle:  String(meetingTitle),
+    organiserName: String(organiserName),
+  });
+};
+
 module.exports = {
   sendDataOnlyNotification,
   sendToUser,
@@ -111,4 +132,6 @@ module.exports = {
   notifyIncomingCall,
   notifyGroupCall,
   notifyStatusView,
+  notifyMeetingInvite,
+  notifyMeetingReminder,
 };
