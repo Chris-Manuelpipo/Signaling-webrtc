@@ -37,6 +37,7 @@ const cors = require('cors');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const authRoutes         = require('./src/routes/auth');
+const authCustomRoutes   = require('./src/routes/authCustom');
 const paysRoutes         = require('./src/routes/pays');
 const userRoutes         = require('./src/routes/users');
 const conversationRoutes = require('./src/routes/conversations');
@@ -92,7 +93,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/auth',          authRoutes);
-app.use('/api/pays',          paysRoutes);
+app.use('/api/auth-custom',   authCustomRoutes);
+app.use('/api/pays',            paysRoutes);
 app.use('/api/users',         userRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/conversations', messageRoutes);
