@@ -11,6 +11,7 @@ const sendDataOnlyNotification = async (fcmToken, data = {}) => {
     // ✅ PAS de champ "notification" → Flutter reçoit tout via onMessage
     // Android ne génère pas de notif système, flutter_local_notifications gère l'affichage
     const message = {
+      
       token: fcmToken,
       data: Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, String(v)])
