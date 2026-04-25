@@ -42,7 +42,7 @@ const register = async (req, res) => {
       `INSERT INTO users
         (nom, pseudo, alanyaPhone, email, password, idPays, avatar_url,
          fcm_token, device_ID, last_seen, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         nom || 'Utilisateur',
         pseudo || nom || 'Kamite',
